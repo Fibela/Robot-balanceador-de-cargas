@@ -1,72 +1,183 @@
-# Plan de Pruebas - Robot Balanceador de Cargas
+# Plan de Pruebas - Robot Balanceador de Cargas (IEEE 29119)
 
-## 1) Objetivo
+## 1) Propósito y alcance
 
-Validar funcionamiento, estabilidad, seguridad y capacidad de carga de la plataforma balanceadora.
+Definir y ejecutar pruebas del software de control para plataforma balanceadora (Arduino Uno R3 + 4x SG90 + HC-SR04), con verificación de comportamiento por telemetría serial y criterios de aceptación cuantitativos.
 
-## 2) Precondiciones
+Este plan adopta estructura alineada a **IEEE 29119**.
 
-- Firmware cargado en Arduino MEGA.
-- MPU6050 detectada correctamente.
-- HX711 calibrados (izq/der).
-- Motores responden a señal PWM.
-- E-STOP operativo.
-- Fuente de motor adecuada y GND común.
+---
 
-## 3) Casos de prueba
+## 2) Estrategia de pruebas (IEEE 29119)
 
-### CP-01: Arranque en reposo
-**Entrada:** encender sin carga.  
-**Esperado:** ángulos cercanos a 0°, sin fault, PWM bajo.
+### 2.1 Niveles cubiertos
+- **Pruebas funcionales de sistema** (comportamiento esperado del lazo de control).
+- **Pruebas no funcionales** (desempeño, confiabilidad, seguridad).
+- **Pruebas de regresión básica** tras cambio de parámetros.
 
-### CP-02: Carga nominal baja
-**Entrada:** colocar 0.5 kg centrados.  
-**Esperado:** plataforma estable, RMS bajo, sin saturación excesiva.
+### 2.2 Técnicas principales
+- Pruebas basadas en escenarios.
+- Pruebas por umbral (límites de aceptación de KPI).
+- Pruebas de perturbación controlada.
+- Pruebas de seguridad por activación de eventos.
 
-### CP-03: Perturbación externa
-**Entrada:** empuje leve lateral durante 1s.  
-**Esperado:** recuperación al equilibrio y tiempo de asentamiento medible.
+### 2.3 Criterio de entrada
+- Firmware compila y carga correctamente en Arduino Uno R3.
+- Monitor serial operativo a 115200.
+- HC-SR04 y 4 servos conectados según configuración.
+- Fuente dedicada de servos activa y GND común.
 
-### CP-04: Carga desbalanceada
-**Entrada:** mover carga hacia lado izquierdo.  
-**Esperado:** corrección de inclinación y lectura de `diffKg` coherente.
+### 2.4 Criterio de salida
+- Todos los casos críticos ejecutados.
+- Evidencia serial registrada.
+- KPIs evaluados contra umbrales (`docs/quality-metrics.md`).
+- Informe PASS/FAIL consolidado.
 
-### CP-05: Escalera de carga
-**Entrada:** incrementar 0.25 kg hasta límite seguro.  
-**Esperado:** registrar punto donde se pierde desempeño aceptable.
+---
 
-### CP-06: Seguridad por ángulo
-**Entrada:** inclinar manualmente más allá del límite configurado.  
-**Esperado:** `FAULT,ANGLE_LIMIT`, paro de motores.
+## 3) Datos base y configuración de prueba
 
-### CP-07: Seguridad por botón
-**Entrada:** presionar E-STOP.  
-**Esperado:** `FAULT,ESTOP_BUTTON`, motores en 0 inmediato.
+- Caso de referencia de masa: **36 g**.
+- Ejes de control: **Y/Z**.
+- Ventana mínima por ejecución: 120 s.
+- Formatos de log esperados:
+  - `DATA,time_ms,dist_cm,error_y,error_z,servo1,servo2,servo3,servo4`
+  - `EVENT,time_ms,code,detail`
+  - `METRIC,window_s,rms_y,rms_z,maxerr_y,maxerr_z,settling_ms,sat_pct,loop_ok_pct`
 
-## 4) Registro de datos
+---
 
-Capturar por serial líneas:
+## 4) Casos de prueba detallados
 
-- `DATA,time,angleX,angleY,loadL,loadR,ctrlX,ctrlY`
-- `METRICS,rmsX=...,rmsY=...,satPct=...`
+### TP-01 Arranque y estado inicial
+- **Objetivo:** validar inicialización estable del sistema.
+- **Precondición:** firmware recién cargado, hardware energizado.
+- **Pasos:**
+  1. Encender sistema.
+  2. Esperar 10 s de estabilización.
+  3. Observar logs `DATA`/`EVENT`.
+- **Resultado esperado:**
+  - Sin eventos de error en arranque.
+  - Salidas de servo en rango válido.
+  - Telemetría continua.
+- **Criterio PASS:** no hay fallo crítico y telemetría íntegra.
 
-Guardar en CSV para análisis en Excel o Python.
+### TP-02 Seguimiento nominal con objeto (36 g)
+- **Objetivo:** validar desempeño nominal de control.
+- **Precondición:** TP-01 en PASS.
+- **Pasos:**
+  1. Ejecutar escenario nominal 120 s.
+  2. Registrar logs.
+  3. Calcular KPIs.
+- **Resultado esperado:**
+  - Error y settling dentro de umbral.
+  - Saturación moderada.
+- **Criterio PASS:** KPI-01..KPI-05 dentro de límites nominales.
 
-## 5) Criterio de aprobación general
+### TP-03 Perturbación breve y recuperación
+- **Objetivo:** medir recuperación del sistema.
+- **Precondición:** TP-02 en ejecución.
+- **Pasos:**
+  1. Aplicar perturbación breve (simulada/controlada) durante ~1 s.
+  2. Continuar registro por 60 s adicionales.
+- **Resultado esperado:**
+  - Recuperación al régimen estable.
+  - Tiempo de asentamiento medible y dentro de umbral.
+- **Criterio PASS:** KPI-03 cumple; sin fault crítico.
 
-- Sin fallos críticos en 5 minutos de operación.
-- Recuperación estable ante perturbaciones leves.
-- Métricas dentro de umbrales definidos en `quality-metrics.md`.
-- Seguridad actuando correctamente en todos los escenarios.
+### TP-04 Prueba de saturación de actuadores
+- **Objetivo:** cuantificar operación en límites.
+- **Precondición:** sistema operativo.
+- **Pasos:**
+  1. Ejecutar escenario exigente (cambio brusco de referencia).
+  2. Registrar porcentaje de saturación.
+- **Resultado esperado:**
+  - Saturación detectable pero controlada.
+  - Sin pérdida de lazo.
+- **Criterio PASS:** KPI-04 dentro de umbral definido para escenario.
 
-## 6) Plantilla de resultados (reporte)
+### TP-05 Integridad del lazo y telemetría
+- **Objetivo:** validar continuidad y calidad de datos.
+- **Precondición:** ejecución mínima de 5 min.
+- **Pasos:**
+  1. Correr sistema continuo.
+  2. Contar líneas válidas y ciclos válidos.
+- **Resultado esperado:**
+  - `loop_ok_pct` alto.
+  - Telemetría sin cortes relevantes.
+- **Criterio PASS:** KPI-05 y KPI-07 ≥ 99%.
 
-| Caso | Estado | RMS X | RMS Y | Settling X | Settling Y | Sat % | Observaciones |
-|------|--------|-------|-------|------------|------------|-------|---------------|
-| CP-01 | PASS/FAIL | | | | | | |
-| CP-02 | PASS/FAIL | | | | | | |
-| CP-03 | PASS/FAIL | | | | | | |
-| CP-04 | PASS/FAIL | | | | | | |
-| CP-05 | PASS/FAIL | | | | | | |
-| CP-06 | PASS/FAIL | | | | | | |
-| CP-07 | PASS/FAIL | | | | | | |
+### TP-06 Seguridad funcional (evento forzado)
+- **Objetivo:** comprobar respuesta ante condición anómala.
+- **Precondición:** sistema en ejecución.
+- **Pasos:**
+  1. Forzar condición de seguridad (evento de prueba).
+  2. Verificar emisión de `EVENT`.
+  3. Verificar comando seguro a servos.
+- **Resultado esperado:**
+  - Evento registrado con código claro.
+  - Actuación en modo seguro.
+- **Criterio PASS:** detección + reacción correcta + log consistente.
+
+### TP-07 Regresión de parámetros de control
+- **Objetivo:** validar que ajustes de parámetros no degradan calidad.
+- **Precondición:** baseline de KPIs disponible.
+- **Pasos:**
+  1. Ajustar parámetros de control.
+  2. Repetir TP-02 y TP-03.
+  3. Comparar KPIs vs baseline.
+- **Resultado esperado:**
+  - Mejora o mantenimiento de desempeño.
+- **Criterio PASS:** no degradación crítica de KPIs principales.
+
+---
+
+## 5) Matriz resumida de trazabilidad prueba ↔ métrica
+
+| Caso | Adecuación funcional | Eficiencia | Confiabilidad | Seguridad | KPIs clave |
+|------|----------------------|-----------|---------------|-----------|------------|
+| TP-01 | Sí | Parcial | Sí | Sí | KPI-05, KPI-07 |
+| TP-02 | Sí | Sí | Sí | Parcial | KPI-01, KPI-02, KPI-03, KPI-04 |
+| TP-03 | Sí | Sí | Sí | Parcial | KPI-03, KPI-04 |
+| TP-04 | Parcial | Sí | Sí | Parcial | KPI-04, KPI-06 |
+| TP-05 | Parcial | Sí | Sí | No | KPI-05, KPI-07 |
+| TP-06 | Parcial | No | Sí | Sí | KPI-08 |
+| TP-07 | Sí | Sí | Sí | Parcial | KPI-01..KPI-07 |
+
+---
+
+## 6) Gestión de incidencias
+
+Formato sugerido por incidencia:
+
+- ID
+- Fecha/hora
+- Caso de prueba asociado
+- Severidad (Alta/Media/Baja)
+- Descripción
+- Evidencia (fragmento de log)
+- Estado (Abierta/En análisis/Cerrada)
+- Acción correctiva
+
+---
+
+## 7) Plantilla de resultados de ejecución
+
+| Ejecución | Caso | Estado | RMS Y | RMS Z | MaxErr Y | MaxErr Z | Settling (s) | Sat % | Loop OK % | Telemetría % | Observaciones |
+|----------|------|--------|-------|-------|----------|----------|--------------|-------|-----------|--------------|---------------|
+| RUN-01 | TP-01 | PASS/FAIL | | | | | | | | | |
+| RUN-01 | TP-02 | PASS/FAIL | | | | | | | | | |
+| RUN-01 | TP-03 | PASS/FAIL | | | | | | | | | |
+| RUN-01 | TP-04 | PASS/FAIL | | | | | | | | | |
+| RUN-01 | TP-05 | PASS/FAIL | | | | | | | | | |
+| RUN-01 | TP-06 | PASS/FAIL | | | | | | | | | |
+| RUN-01 | TP-07 | PASS/FAIL | | | | | | | | | |
+
+---
+
+## 8) Entregables de pruebas
+
+- Evidencia de logs seriales (archivos CSV/TXT).
+- Tabla consolidada de resultados.
+- Incidencias registradas y estado.
+- Conclusión de cumplimiento contra ISO/IEC 25010 (desde métricas).

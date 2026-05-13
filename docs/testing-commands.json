@@ -1,0 +1,186 @@
+{
+  "project": {
+    "name": "Robot Balanceador de Cargas",
+    "scope": "Arduino Uno R3 + 4x SG90 + HC-SR04",
+    "standards": [
+      "ISO/IEC 25010",
+      "IEEE 29119"
+    ],
+    "test_level": "Critical-path testing (A): TP-01 and TP-02",
+    "notes": "Este archivo define comandos y pasos ejecutables para pruebas en otra máquina con arduino-cli instalado."
+  },
+  "environment_requirements": {
+    "os": "Windows/Linux/macOS",
+    "tools": [
+      "arduino-cli >= 0.35",
+      "Python 3.10+ (opcional para parsing de logs)",
+      "Puerto serial disponible para Arduino Uno R3"
+    ],
+    "board_fqbn": "arduino:avr:uno",
+    "baud_rate": 115200
+  },
+  "setup_commands": [
+    {
+      "id": "S01",
+      "description": "Verificar versión de arduino-cli",
+      "command": "arduino-cli version",
+      "expected_result": "Muestra versión instalada sin errores."
+    },
+    {
+      "id": "S02",
+      "description": "Inicializar configuración de arduino-cli (si es primera vez)",
+      "command": "arduino-cli config init",
+      "expected_result": "Se crea archivo de configuración."
+    },
+    {
+      "id": "S03",
+      "description": "Actualizar índice de cores",
+      "command": "arduino-cli core update-index",
+      "expected_result": "Índices actualizados correctamente."
+    },
+    {
+      "id": "S04",
+      "description": "Instalar core AVR (Arduino Uno)",
+      "command": "arduino-cli core install arduino:avr",
+      "expected_result": "Core instalado con éxito."
+    },
+    {
+      "id": "S05",
+      "description": "Listar placas conectadas y detectar puerto",
+      "command": "arduino-cli board list",
+      "expected_result": "Aparece Arduino Uno y puerto (ej. COM5 o /dev/ttyACM0)."
+    }
+  ],
+  "build_commands": [
+    {
+      "id": "B01",
+      "description": "Compilar firmware para Arduino Uno R3",
+      "command": "arduino-cli compile --fqbn arduino:avr:uno src/main.ino",
+      "expected_result": "Compilación exitosa, sin errores de sintaxis/linker."
+    },
+    {
+      "id": "B02",
+      "description": "Subir firmware (reemplazar COMX por puerto real)",
+      "command": "arduino-cli upload -p COMX --fqbn arduino:avr:uno src/main.ino",
+      "expected_result": "Upload completado correctamente."
+    }
+  ],
+  "runtime_commands": [
+    {
+      "id": "R01",
+      "description": "Monitorear serial para TP-01 y TP-02 (Arduino CLI monitor)",
+      "command": "arduino-cli monitor -p COMX -c baudrate=115200",
+      "expected_result": "Se observan líneas INFO/DATA/EVENT/METRIC en tiempo real."
+    },
+    {
+      "id": "R02",
+      "description": "Alternativa PowerShell para guardar log crudo (si no se usa monitor CLI)",
+      "command": "python -m serial.tools.miniterm COMX 115200",
+      "expected_result": "Consola serial activa para captura manual."
+    }
+  ],
+  "test_execution": [
+    {
+      "test_id": "TP-01",
+      "name": "Arranque y estado inicial",
+      "objective": "Verificar inicialización estable del firmware y telemetría básica.",
+      "preconditions": [
+        "Firmware compilado y cargado.",
+        "Monitor serial abierto a 115200."
+      ],
+      "steps": [
+        "Encender/reiniciar Arduino Uno R3.",
+        "Esperar 10 segundos de estabilización.",
+        "Registrar logs de inicio y primeras líneas DATA/EVENT/METRIC."
+      ],
+      "expected_logs": [
+        "INFO,... (encabezado/inicio)",
+        "DATA,time_ms,...",
+        "Ausencia de eventos críticos de fallo en nominal."
+      ],
+      "pass_criteria": [
+        "Telemetría continua.",
+        "Sin fault crítico en arranque.",
+        "Salidas de actuadores dentro de rangos válidos."
+      ],
+      "iso_25010_mapping": [
+        "Functional suitability",
+        "Reliability",
+        "Performance efficiency"
+      ],
+      "evidence_required": [
+        "Archivo de log serial (TXT/CSV)",
+        "Resumen PASS/FAIL del caso TP-01"
+      ]
+    },
+    {
+      "test_id": "TP-02",
+      "name": "Seguimiento nominal con objeto (36 g)",
+      "objective": "Validar estabilidad y desempeño nominal.",
+      "preconditions": [
+        "TP-01 en PASS.",
+        "Escenario nominal configurado."
+      ],
+      "steps": [
+        "Ejecutar sistema por 120 segundos.",
+        "Registrar telemetría DATA/METRIC.",
+        "Calcular KPI-01..KPI-05."
+      ],
+      "expected_logs": [
+        "DATA,time_ms,dist_cm,error_y,error_z,servo1,servo2,servo3,servo4",
+        "METRIC,window_s,rms_y,rms_z,maxerr_y,maxerr_z,settling_ms,sat_pct,loop_ok_pct"
+      ],
+      "pass_criteria": [
+        "RMS <= 5% del setpoint.",
+        "Settling <= 3.0 s.",
+        "Sat % < 25% nominal.",
+        "Loop OK % >= 99%."
+      ],
+      "iso_25010_mapping": [
+        "Functional suitability",
+        "Performance efficiency",
+        "Reliability"
+      ],
+      "evidence_required": [
+        "Archivo de log serial (TXT/CSV)",
+        "Tabla de KPIs calculados",
+        "Resultado PASS/FAIL TP-02"
+      ]
+    }
+  ],
+  "kpi_calculation_guidelines": {
+    "kpi_01_rms": "sqrt(sum(error^2)/N)",
+    "kpi_02_max_error": "max(abs(error))",
+    "kpi_03_settling_time": "Tiempo hasta permanecer en banda ±5% del setpoint",
+    "kpi_04_saturation_pct": "(muestras_saturadas / muestras_totales) * 100",
+    "kpi_05_loop_ok_pct": "(ciclos_validos / ciclos_totales) * 100"
+  },
+  "report_template": {
+    "fields": [
+      "run_id",
+      "test_id",
+      "status",
+      "rms_y",
+      "rms_z",
+      "max_error_y",
+      "max_error_z",
+      "settling_s",
+      "saturation_pct",
+      "loop_ok_pct",
+      "observations"
+    ],
+    "example": {
+      "run_id": "RUN-01",
+      "test_id": "TP-02",
+      "status": "PASS",
+      "rms_y": "",
+      "rms_z": "",
+      "max_error_y": "",
+      "max_error_z": "",
+      "settling_s": "",
+      "saturation_pct": "",
+      "loop_ok_pct": "",
+      "observations": "Completar con evidencia real."
+    }
+  }
+}

@@ -1,28 +1,30 @@
-# Robot Balanceador de Cargas (Plataforma) - Arduino MEGA
+# Robot Balanceador de Cargas (Plataforma 10x10 cm) - Arduino Uno R3
 
-Proyecto semestral universitario: plataforma móvil/estática que mantiene el equilibrio de una carga mediante control de inclinación y distribución de peso, usando componentes accesibles y código en C++ compatible con Arduino.
+Proyecto semestral universitario (Calidad de Sistemas): plataforma balanceadora de cargas con control por software, orientada a validar lógica de control, seguridad y métricas de calidad mediante ejecución y pruebas desde terminal (monitor serial) en VSCode/Arduino IDE.
 
 ## 1) Objetivo del sistema
 
-Diseñar e implementar un robot/plataforma balanceadora de cargas que:
+Diseñar, implementar y validar un sistema de control para plataforma balanceadora que:
 
-- Detecte inclinación en eje X/Y con IMU (MPU6050).
-- Mida distribución de carga con celdas de carga + HX711.
-- Aplique control PID para corregir la inclinación.
-- Accione motores (o actuadores) para restablecer equilibrio.
-- Reporte métricas de desempeño por puerto serial.
+- opere sobre los ejes **Y/Z** (según alcance del equipo),
+- utilice **4 servomotores SG90** como actuadores,
+- utilice **HC-SR04** para detección de objeto y seguimiento de variación de distancia/movimiento,
+- procese señales en lazo de control y genere comando por servo,
+- registre resultados y métricas por serial para análisis de calidad.
 
-## 2) Alcance académico
+Masa objetivo de validación del caso base: **36 g**.
 
-Incluye:
+---
 
-- Código fuente completo en C++ para Arduino MEGA.
-- Arquitectura modular mantenible.
-- Parámetros de control ajustables.
-- Métricas de calidad de sistema.
-- Documentación de conexión, calibración y pruebas.
+## 2) Alcance académico (calidad de sistemas)
 
-No incluye CAD mecánico ni PCB custom (puede añadirse luego).
+Este repositorio cubre:
+
+- Documentación técnica de inicio a fin del proceso.
+- Diseño de pruebas y criterios de aceptación formales.
+- Marco de métricas alineado a **ISO/IEC 25010**.
+- Estructura de pruebas alineada a **IEEE 29119**.
+- Estrategia de validación del software desde terminal (serial logging).
 
 ---
 
@@ -53,139 +55,133 @@ No incluye CAD mecánico ni PCB custom (puede añadirse luego).
     └── metrics.cpp
 ```
 
+> Nota de ingeniería documental: el repositorio incluye módulos heredados (IMU/HX711) de una iteración previa.  
+> Para el alcance actual del equipo, la documentación y validación se concentran en **Uno R3 + SG90 + HC-SR04** y pruebas de software por serial.
+
 ---
 
-## 4) Componentes de hardware (accesibles)
+## 4) Hardware del equipo (versión actual)
 
 ### Control y sensado
-- 1x Arduino MEGA 2560
-- 1x MPU6050 (IMU 6 ejes)
-- 2x o 4x celdas de carga (según diseño mecánico)
-- 1x o 2x módulos HX711 (depende de cantidad de celdas)
-- Cables dupont / protoboard / borneras
+- 1x Arduino Uno R3
+- 1x Sensor ultrasónico HC-SR04
+- 1x Protoboard
+- Cables dupont
+- LEDs de testeo
 
 ### Actuación
-- Opción A (simple): 2x motores DC + driver BTS7960 o L298N
-- Opción B (fina): 2x motores con encoder + driver robusto
-- Fuente externa para motores (ej. 12V), GND común con Arduino
+- 4x servomotores Power Pro Micro Servo 9g SG90
+
+### Alimentación
+- Fuente dedicada recomendada para servos (**5V, al menos 2A**)
+- Batería de 9V: solo referencia inicial (no recomendada como única fuente de servos bajo carga)
 
 ### Estructura
-- Plataforma base rígida (madera/acrílico/aluminio)
-- Soportes para sensores y carga
+- Plataforma conceptual de 10x10 cm (modelo de referencia del proyecto)
 
 ---
 
-## 5) Variables de desempeño (métricas)
+## 5) Flujo funcional del software (alto nivel)
 
-1. Error angular RMS (°)
-2. Tiempo de asentamiento (s)
-3. Sobreimpulso máximo (% o °)
-4. Porcentaje de saturación del actuador (%)
-5. Desbalance de carga (% entre lados)
-6. Disponibilidad en lazo de control (% ciclos válidos)
-
-Detalles en `docs/quality-metrics.md`.
-
----
-
-## 6) Conexión recomendada (Arduino MEGA)
-
-> Ajustable en `include/config.h`.
-
-- MPU6050 (I2C):
-  - SDA -> 20
-  - SCL -> 21
-- HX711 izquierda:
-  - DT -> 22
-  - SCK -> 23
-- HX711 derecha:
-  - DT -> 24
-  - SCK -> 25
-- Motor izquierdo (PWM/DIR):
-  - PWM -> 5
-  - DIR -> 26
-- Motor derecho (PWM/DIR):
-  - PWM -> 6
-  - DIR -> 27
-- E-STOP / botón seguridad:
-  - Pin digital -> 28 (INPUT_PULLUP)
+1. Leer distancia del HC-SR04.
+2. Estimar variación respecto al setpoint/escenario esperado.
+3. Aplicar lógica de control (proporcional/PID simplificado según implementación activa).
+4. Calcular comandos para servos por eje.
+5. Limitar salida por seguridad (rangos y saturación).
+6. Publicar telemetría serial (`DATA`, `EVENT`, `METRIC`).
+7. Evaluar métricas agregadas y criterios de aceptación.
 
 ---
 
-## 7) Compilación y carga
+## 6) Mapeo de pines sugerido (Arduino Uno R3)
+
+> Configurable en `include/config.h`.
+
+- HC-SR04
+  - TRIG -> D8
+  - ECHO -> D7
+- SG90 #1 (Eje Y frontal) -> D3 (PWM)
+- SG90 #2 (Eje Y trasero) -> D5 (PWM)
+- SG90 #3 (Eje Z izquierdo) -> D6 (PWM)
+- SG90 #4 (Eje Z derecho) -> D9 (PWM)
+- LED estado -> D13
+- E-STOP (opcional) -> D2 (INPUT_PULLUP)
+
+---
+
+## 7) Preparación de entorno y compilación
 
 1. Abrir `src/main.ino` en Arduino IDE.
-2. Instalar librerías:
-   - `Wire` (incluida normalmente)
-   - `MPU6050` (Jeff Rowberg o compatible)
-   - `HX711` (Bogde o compatible)
-3. Seleccionar placa: **Arduino Mega or Mega 2560**
-4. Seleccionar puerto COM.
-5. Subir firmware.
+2. Seleccionar placa: **Arduino Uno**.
+3. Seleccionar procesador/puerto COM correspondiente.
+4. Instalar librerías mínimas (si aplica en implementación actual):
+   - `Servo` (incluida en entorno Arduino)
+5. Compilar y subir.
+6. Abrir monitor serial a `115200` baudios.
 
 ---
 
-## 8) Calibración mínima
+## 8) Estrategia de validación por terminal (VSCode/Serial Monitor)
 
-1. Encender sin carga para fijar offset IMU.
-2. Calibrar factor HX711 por lado (izq/der).
-3. Ajustar PID:
-   - iniciar con Kp bajo
-   - aumentar Kp hasta respuesta aceptable
-   - añadir Kd para amortiguar
-   - añadir Ki pequeño para error estacionario
-4. Verificar límites de seguridad (ángulo y PWM máximos).
+Como el enfoque inmediato es probar software, ejecutar campañas de prueba por serial:
 
----
-
-## 9) Uso por Serial
-
-Baud rate: `115200`.
-
-Se imprimen variables:
-
-- `angle_x`, `angle_y`
-- `load_left`, `load_right`, `load_diff`
-- `pid_x`, `pid_y`
-- métricas acumuladas (`rms_error`, `settling_time`, `saturation_pct`)
+- Registrar líneas tipo:
+  - `DATA,time_ms,dist_cm,error_y,error_z,servo1,servo2,servo3,servo4`
+  - `EVENT,time_ms,code,detail`
+  - `METRIC,window_s,rms_error,max_error,settling_ms,sat_pct,loop_ok_pct`
+- Exportar logs a CSV.
+- Analizar en hoja de cálculo o script Python.
+- Consolidar evidencia por caso de prueba (ver `docs/test-plan.md`).
 
 ---
 
-## 10) Pregunta clave: ¿Cuánto peso soporta?
+## 9) Parámetros iniciales recomendados
 
-Depende de:
-
-- Diseño mecánico de la plataforma
-- Torque del motor/actuador
-- Tipo de transmisión (directa, engranada, husillo, etc.)
-- Capacidad de celdas de carga
-- Margen de seguridad (recomendado 30%)
-
-Para laboratorio universitario accesible:
-- objetivo inicial sugerido: **0.5 kg a 2.0 kg** de carga útil.
-- validar experimentalmente con incrementos de 0.25 kg.
+- Frecuencia de lazo: 20 a 50 Hz
+- Ventana de métrica: 10 s
+- Límite angular/comando equivalente por servo: 0° a 180° (con límites operativos más conservadores)
+- Banda de error estable: ±5% del valor objetivo de distancia
+- Saturación aceptable (operación nominal): < 25%
 
 ---
 
-## 11) Seguridad y buenas prácticas
+## 10) Criterios de aceptación global (resumen)
 
-- Usar fuente separada para motores.
-- Unir GND de potencia y control.
-- Activar `E_STOP` físico.
-- Limitar PWM y ángulo máximo.
-- Implementar paro por sensor inválido.
+- Estabilidad del control en caso base de **36 g**.
+- Errores dentro de umbral definido en plan de métricas.
+- Saturación no excesiva en operación nominal.
+- Trazas seriales completas y consistentes.
+- Cumplimiento documental de ISO/IEC 25010 + IEEE 29119.
+
+---
+
+## 11) Gestión de calidad y trazabilidad
+
+La calidad se evidencia con:
+
+- Matriz requisito → caso de prueba → métrica → evidencia.
+- Registro de resultados por ejecución.
+- Umbrales de aprobación cuantitativos.
+- Historial de ajustes de parámetros y su impacto.
+
+Ver detalle en:
+
+- `docs/quality-metrics.md`
+- `docs/test-plan.md`
+- `TODO.md`
 
 ---
 
 ## 12) Entregables académicos recomendados
 
-- Video de prueba con escalones de carga.
-- Tabla de métricas (antes/después de sintonizar PID).
-- Discusión de límites del sistema.
-- Propuesta de mejoras futuras.
+- Documento técnico final (arquitectura, decisiones y resultados).
+- Plan de pruebas ejecutado y evidencias.
+- Tabla comparativa de iteraciones de control.
+- Bitácora de defectos/incidencias y correcciones.
+- Conclusiones de calidad del sistema.
 
 ---
 
 ## 13) Licencia
 
-Uso académico. Puedes cambiar a MIT si lo subes públicamente en GitHub.
+Uso académico.
