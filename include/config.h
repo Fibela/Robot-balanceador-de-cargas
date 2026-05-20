@@ -3,55 +3,62 @@
 
 #include <Arduino.h>
 
-// ===================== Pines =====================
-// I2C en Arduino MEGA: SDA=20, SCL=21
+// ===================== Pines Arduino Uno R3 =====================
+// HC-SR04
+static const uint8_t HCSR04_TRIG_PIN = 8;
+static const uint8_t HCSR04_ECHO_PIN = 7;
 
-// HX711
-static const uint8_t HX711_LEFT_DT_PIN  = 22;
-static const uint8_t HX711_LEFT_SCK_PIN = 23;
-static const uint8_t HX711_RIGHT_DT_PIN  = 24;
-static const uint8_t HX711_RIGHT_SCK_PIN = 25;
+// Servos SG90 (plataforma 2 ejes con 4 actuadores)
+static const uint8_t SERVO_Y_FRONT_PIN = 3;
+static const uint8_t SERVO_Y_REAR_PIN = 5;
+static const uint8_t SERVO_Z_LEFT_PIN = 6;
+static const uint8_t SERVO_Z_RIGHT_PIN = 9;
 
-// Driver motores (PWM + DIR)
-static const uint8_t MOTOR_LEFT_PWM_PIN = 5;
-static const uint8_t MOTOR_LEFT_DIR_PIN = 26;
-static const uint8_t MOTOR_RIGHT_PWM_PIN = 6;
-static const uint8_t MOTOR_RIGHT_DIR_PIN = 27;
-
-// Seguridad
-static const uint8_t ESTOP_PIN = 28; // INPUT_PULLUP
+// Estado y seguridad
+static const uint8_t STATUS_LED_PIN = 13;
+static const uint8_t ESTOP_PIN = 2; // INPUT_PULLUP (opcional)
 
 // ===================== Lazo de control =====================
-static const float CONTROL_DT_SEC = 0.01f;   // 100 Hz
-static const uint32_t CONTROL_PERIOD_MS = 10;
+static const uint32_t CONTROL_PERIOD_MS = 20; // 50 Hz
 
-// ===================== Límites =====================
-static const float MAX_SAFE_ANGLE_DEG = 15.0f;
-static const int MAX_PWM_OUTPUT = 180;       // limitar para pruebas
-static const int MIN_PWM_OUTPUT = 0;
+// ===================== Distancia objetivo =====================
+static const float TARGET_DISTANCE_CM = 20.0f;
+static const float STABLE_ERROR_BAND_CM = 1.0f;
 
-// ===================== PID X =====================
-static const float PID_X_KP = 10.0f;
-static const float PID_X_KI = 0.8f;
-static const float PID_X_KD = 1.2f;
+// ===================== Límites de servo =====================
+static const int SERVO_MIN_DEG = 0;
+static const int SERVO_MAX_DEG = 180;
+static const int SERVO_CENTER_DEG = 90;
+static const int SERVO_TRIM_Y_FRONT = 0;
+static const int SERVO_TRIM_Y_REAR = 0;
+static const int SERVO_TRIM_Z_LEFT = 0;
+static const int SERVO_TRIM_Z_RIGHT = 0;
+static const int SERVO_MAX_DELTA_DEG = 35; // desviación máxima desde centro
 
-// ===================== PID Y =====================
-static const float PID_Y_KP = 10.0f;
-static const float PID_Y_KI = 0.8f;
-static const float PID_Y_KD = 1.2f;
+// ===================== Control PID (error de distancia) =====================
+static const float PID_DIST_KP = 2.2f;
+static const float PID_DIST_KI = 0.15f;
+static const float PID_DIST_KD = 0.4f;
 
-// ===================== Filtro complementario =====================
-static const float COMPLEMENTARY_ALPHA = 0.98f;
+// Conversión de salida PID -> comando por eje
+static const float AXIS_MIX_Y_GAIN = 1.0f;
+static const float AXIS_MIX_Z_GAIN = 1.0f;
 
-// ===================== Celdas de carga =====================
-// Ajustar experimentalmente:
-static const float HX711_LEFT_SCALE = 420.0f;
-static const float HX711_RIGHT_SCALE = 420.0f;
-static const long HX711_LEFT_OFFSET = 0;
-static const long HX711_RIGHT_OFFSET = 0;
+// ===================== Seguridad =====================
+static const float MAX_SAFE_ERROR_CM = 12.0f;
+static const uint16_t HCSR04_TIMEOUT_US = 30000; // ~5m
 
-// ===================== Consignas =====================
-static const float TARGET_ANGLE_X_DEG = 0.0f;
-static const float TARGET_ANGLE_Y_DEG = 0.0f;
+// ===================== Modo simulación (sin hardware completo) =====================
+// true: usa distancia simulada en main.ino
+// false: usa HC-SR04 real
+static const bool SIMULATION_MODE = false;
+
+// Escenarios de simulación
+// 0 = nominal, 1 = perturbación, 2 = saturación, 3 = fallo intermitente de sensor
+static const uint8_t SIM_SCENARIO = 0;
+
+// Parámetros de simulación
+static const float SIM_BASE_DISTANCE_CM = TARGET_DISTANCE_CM;
+static const float SIM_NOISE_AMPLITUDE_CM = 0.25f;
 
 #endif

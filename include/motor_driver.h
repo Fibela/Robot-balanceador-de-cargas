@@ -2,32 +2,41 @@
 #define MOTOR_DRIVER_H
 
 #include <Arduino.h>
+#include <Servo.h>
 
 class MotorDriver {
 public:
-  MotorDriver(uint8_t leftPwmPin, uint8_t leftDirPin, uint8_t rightPwmPin, uint8_t rightDirPin);
+  MotorDriver(
+    uint8_t yFrontPin, uint8_t yRearPin,
+    uint8_t zLeftPin, uint8_t zRightPin
+  );
 
   void begin();
-  void setOutput(float controlX, float controlY, int maxPwm);
+  void setOutput(float controlY, float controlZ, int maxDeltaDeg);
   void stopAll();
 
-  int getLeftPwm() const;
-  int getRightPwm() const;
-  bool getLeftDir() const;
-  bool getRightDir() const;
+  int getYFrontDeg() const;
+  int getYRearDeg() const;
+  int getZLeftDeg() const;
+  int getZRightDeg() const;
 
 private:
-  uint8_t leftPwmPin;
-  uint8_t leftDirPin;
-  uint8_t rightPwmPin;
-  uint8_t rightDirPin;
+  uint8_t yFrontPin;
+  uint8_t yRearPin;
+  uint8_t zLeftPin;
+  uint8_t zRightPin;
 
-  int lastLeftPwm;
-  int lastRightPwm;
-  bool lastLeftDir;
-  bool lastRightDir;
+  Servo servoYFront;
+  Servo servoYRear;
+  Servo servoZLeft;
+  Servo servoZRight;
 
-  void setMotor(uint8_t pwmPin, uint8_t dirPin, float command, int &amp;outPwm, bool &amp;outDir, int maxPwm);
+  int lastYFrontDeg;
+  int lastYRearDeg;
+  int lastZLeftDeg;
+  int lastZRightDeg;
+
+  int clampDeg(int v) const;
 };
 
 #endif

@@ -4,12 +4,9 @@
 #include <Arduino.h>
 
 struct ControlMetrics {
-  float rmsErrorX;
-  float rmsErrorY;
-  float maxAbsErrorX;
-  float maxAbsErrorY;
-  float settlingTimeXSec;
-  float settlingTimeYSec;
+  float rmsErrorCm;
+  float maxAbsErrorCm;
+  float settlingTimeSec;
   float actuatorSaturationPct;
   uint32_t totalSamples;
 };
@@ -20,30 +17,29 @@ public:
 
   void reset();
   void update(
-    float targetX, float targetY,
-    float measuredX, float measuredY,
-    int pwmLeft, int pwmRight,
-    int maxPwm, float timeSec
+    float targetDistanceCm,
+    float measuredDistanceCm,
+    int servoYFrontDeg, int servoYRearDeg,
+    int servoZLeftDeg, int servoZRightDeg,
+    int centerDeg, int maxDeltaDeg,
+    float stableBandCm, float timeSec
   );
 
   ControlMetrics getMetrics() const;
   void printCsvLine(
     float timeSec,
-    float angleX, float angleY,
-    float loadLeft, float loadRight,
-    float controlX, float controlY
+    float distanceCm,
+    float errorCm,
+    int servoYFrontDeg, int servoYRearDeg,
+    int servoZLeftDeg, int servoZRightDeg
   ) const;
 
 private:
-  float sumSqErrX;
-  float sumSqErrY;
-  float maxAbsErrX;
-  float maxAbsErrY;
+  float sumSqErrCm;
+  float maxAbsErrCm;
 
-  bool settledX;
-  bool settledY;
-  float settlingTimeXSec;
-  float settlingTimeYSec;
+  bool settled;
+  float settlingTimeSec;
 
   uint32_t saturationCount;
   uint32_t sampleCount;

@@ -182,6 +182,25 @@ Ver detalle en:
 
 ---
 
-## 13) Licencia
+## 13) Apartado técnico (normas, teoría, métricas, eficiencia y escalabilidad)
+
+Para soporte técnico formal del proyecto, revisar:
+
+- `Documentación/system-engineering.md`  
+  Arquitectura del sistema, definiciones técnicas y teoría de control aplicada (lazo, error, PID, saturación, settling).
+- `Documentación/standards-compliance.md`  
+  Mapeo de cumplimiento y trazabilidad alineado a ISO/IEC 25010 e IEEE 29119.
+- `Documentación/metrics-and-calculations.md`  
+  Fórmulas, métricas cuantitativas, criterios de aceptación y ejemplos de cálculo.
+- `Documentación/efficiency-scalability.md`  
+  Análisis de eficiencia temporal/memoria en Arduino Uno, límites de escalabilidad y estrategias de optimización.
+- `docs/testing-terminal.md`  
+  Procedimiento operativo de pruebas por terminal serial (ruta crítica + pruebas exhaustivas).
+
+Estos documentos conforman la base técnica para validación académica, argumentación ingenieril y evidencia de calidad del software.
+
+---
+
+## 14) Licencia
 
 Uso académico.

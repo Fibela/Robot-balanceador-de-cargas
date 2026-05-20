@@ -1,27 +1,25 @@
 #include "../include/config.h"
-#include "../include/imu_mpu6050.h"
-#include "../include/loadcell_hx711.h"
+#include "../include/distance_hcsr04.h"
 #include "../include/pid_controller.h"
 #include "../include/motor_driver.h"
 #include "../include/safety.h"
 #include "../include/metrics.h"
 
 // ===================== Objetos globales =====================
-ImuMpu6050 imu;
-LoadCellHx711 loadcells(
-  HX711_LEFT_DT_PIN, HX711_LEFT_SCK_PIN,
-  HX711_RIGHT_DT_PIN, HX711_RIGHT_SCK_PIN
+DistanceHcsr04 distanceSensor(HCSR04_TRIG_PIN, HCSR04_ECHO_PIN, HCSR04_TIMEOUT_US);
+PidController pidDist(
+  PID_DIST_KP, PID_DIST_KI, PID_DIST_KD,
+  -(float)SERVO_MAX_DELTA_DEG, (float)SERVO_MAX_DELTA_DEG
 );
-
-PidController pidX(PID_X_KP, PID_X_KI, PID_X_KD, -MAX_PWM_OUTPUT, MAX_PWM_OUTPUT);
-PidController pidY(PID_Y_KP, PID_Y_KI, PID_Y_KD, -MAX_PWM_OUTPUT, MAX_PWM_OUTPUT);
 
 MotorDriver motors(
-  MOTOR_LEFT_PWM_PIN, MOTOR_LEFT_DIR_PIN,
-  MOTOR_RIGHT_PWM_PIN, MOTOR_RIGHT_DIR_PIN
+  SERVO_Y_FRONT_PIN, SERVO_Y_REAR_PIN,
+  SERVO_Z_LEFT_PIN, SERVO_Z_RIGHT_PIN
 );
 
-SafetyManager safety(ESTOP_PIN, MAX_SAFE_ANGLE_DEG);
+// Reutilizado como corte por E-STOP y chequeo de límites.
+// Para ángulos, enviamos "error equivalente" en ambos ejes para usar el mismo guard.
+SafetyManager safety(ESTOP_PIN, MAX_SAFE_ERROR_CM);
 MetricsCollector metrics;
 
 // ===================== Tiempo =====================
@@ -34,22 +32,20 @@ float getTimeSec() {
 }
 
 void printHeader() {
-  Serial.println("INFO,Robot Balanceador de Cargas - Inicio");
-  Serial.println("INFO,Formato CSV: DATA,time,angleX,angleY,loadL,loadR,ctrlX,ctrlY");
+  Serial.println("INFO,Robot Balanceador de Cargas - Prototipo 1 (Arduino Uno)");
+  Serial.println("INFO,Formato CSV: DATA,time_s,dist_cm,error_cm,servoYF,servoYR,servoZL,servoZR");
 }
 
 void setup() {
   Serial.begin(115200);
-  delay(1000);
+  delay(700);
+
+  pinMode(STATUS_LED_PIN, OUTPUT);
+  digitalWrite(STATUS_LED_PIN, LOW);
 
   printHeader();
 
-  bool imuOk = imu.begin();
-  bool lcOk = loadcells.begin(
-    HX711_LEFT_SCALE, HX711_RIGHT_SCALE,
-    HX711_LEFT_OFFSET, HX711_RIGHT_OFFSET
-  );
-
+  distanceSensor.begin();
   motors.begin();
   safety.begin();
   metrics.reset();
@@ -57,8 +53,42 @@ void setup() {
   startMs = millis();
   lastControlMs = millis();
 
-  if (!imuOk) Serial.println("WARN,IMU no detectada");
-  if (!lcOk) Serial.println("WARN,HX711 no inicializado");
+  Serial.println("EVENT,BOOT,ok");
+}
+
+static bool getDistanceSample(DistanceData &dd, uint32_t nowMs) {
+  if (!SIMULATION_MODE) {
+    bool updated = distanceSensor.update();
+    dd = distanceSensor.getData();
+    return updated && dd.valid;
+  }
+
+  // Modo simulación por compilación (sin Node/hardware adicional).
+  // Mantiene formato de telemetría igual al modo real.
+  float t = (nowMs - startMs) / 1000.0f;
+  float dist = SIM_BASE_DISTANCE_CM;
+
+  if (SIM_SCENARIO == 0) { // nominal
+    dist = TARGET_DISTANCE_CM + 1.2f * exp(-t / 2.5f) * sin(2.2f * t);
+  } else if (SIM_SCENARIO == 1) { // perturbación
+    float burst = (t > 3.0f && t < 4.5f) ? 3.5f * sin(8.0f * t) : 0.0f;
+    dist = TARGET_DISTANCE_CM + 1.8f * exp(-t / 4.0f) * sin(2.0f * t) + burst;
+  } else if (SIM_SCENARIO == 2) { // saturación
+    dist = TARGET_DISTANCE_CM + 8.0f * sin(1.4f * t);
+  } else if (SIM_SCENARIO == 3) { // fallo intermitente
+    if (t > 2.0f && t < 2.8f) {
+      dd.valid = false;
+      dd.distanceCm = 0.0f;
+      return false;
+    }
+    dist = TARGET_DISTANCE_CM + 1.6f * sin(2.0f * t);
+  }
+
+  // Ruido determinístico simple
+  float noise = SIM_NOISE_AMPLITUDE_CM * sin(17.0f * t);
+  dd.distanceCm = dist + noise;
+  dd.valid = true;
+  return true;
 }
 
 void loop() {
@@ -66,49 +96,50 @@ void loop() {
   if (nowMs - lastControlMs < CONTROL_PERIOD_MS) {
     return;
   }
-
-  float dtSec = (nowMs - lastControlMs) / 1000.0f;
   lastControlMs = nowMs;
 
-  bool imuUpdated = imu.update(dtSec);
-  bool lcUpdated = loadcells.update();
+  DistanceData dd;
+  bool sensorsHealthy = getDistanceSample(dd, nowMs);
+  float errorCm = TARGET_DISTANCE_CM - dd.distanceCm;
 
-  ImuData id = imu.getData();
-  LoadCellData ld = loadcells.getData();
+  float absErr = errorCm >= 0.0f ? errorCm : -errorCm;
+  bool safe = safety.update(sensorsHealthy, absErr, absErr);
 
-  bool sensorsHealthy = imuUpdated && lcUpdated && id.valid && ld.valid;
-  bool safe = safety.update(sensorsHealthy, id.angleXDeg, id.angleYDeg);
-
-  float ctrlX = 0.0f;
-  float ctrlY = 0.0f;
+  float controlY = 0.0f;
+  float controlZ = 0.0f;
 
   if (safe) {
-    ctrlX = pidX.update(TARGET_ANGLE_X_DEG, id.angleXDeg, dtSec);
-    ctrlY = pidY.update(TARGET_ANGLE_Y_DEG, id.angleYDeg, dtSec);
+    float pidOut = pidDist.update(TARGET_DISTANCE_CM, dd.distanceCm, CONTROL_PERIOD_MS / 1000.0f);
+    controlY = pidOut * AXIS_MIX_Y_GAIN;
+    controlZ = pidOut * AXIS_MIX_Z_GAIN;
 
-    motors.setOutput(ctrlX, ctrlY, MAX_PWM_OUTPUT);
+    motors.setOutput(controlY, controlZ, SERVO_MAX_DELTA_DEG);
+    digitalWrite(STATUS_LED_PIN, HIGH);
   } else {
     motors.stopAll();
-    pidX.reset();
-    pidY.reset();
+    pidDist.reset();
 
+    digitalWrite(STATUS_LED_PIN, LOW);
     Serial.print("FAULT,");
     Serial.println(safety.getLastFault());
   }
 
   float tSec = getTimeSec();
   metrics.update(
-    TARGET_ANGLE_X_DEG, TARGET_ANGLE_Y_DEG,
-    id.angleXDeg, id.angleYDeg,
-    motors.getLeftPwm(), motors.getRightPwm(),
-    MAX_PWM_OUTPUT, tSec
+    TARGET_DISTANCE_CM,
+    dd.distanceCm,
+    motors.getYFrontDeg(), motors.getYRearDeg(),
+    motors.getZLeftDeg(), motors.getZRightDeg(),
+    SERVO_CENTER_DEG, SERVO_MAX_DELTA_DEG,
+    STABLE_ERROR_BAND_CM, tSec
   );
 
   metrics.printCsvLine(
     tSec,
-    id.angleXDeg, id.angleYDeg,
-    ld.leftKg, ld.rightKg,
-    ctrlX, ctrlY
+    dd.distanceCm,
+    errorCm,
+    motors.getYFrontDeg(), motors.getYRearDeg(),
+    motors.getZLeftDeg(), motors.getZRightDeg()
   );
 
   // Resumen cada ~1s
@@ -117,14 +148,11 @@ void loop() {
     lastReportMs = nowMs;
     ControlMetrics m = metrics.getMetrics();
 
-    Serial.print("METRICS,");
-    Serial.print("rmsX="); Serial.print(m.rmsErrorX, 3); Serial.print(",");
-    Serial.print("rmsY="); Serial.print(m.rmsErrorY, 3); Serial.print(",");
-    Serial.print("maxX="); Serial.print(m.maxAbsErrorX, 3); Serial.print(",");
-    Serial.print("maxY="); Serial.print(m.maxAbsErrorY, 3); Serial.print(",");
-    Serial.print("settleX="); Serial.print(m.settlingTimeXSec, 3); Serial.print(",");
-    Serial.print("settleY="); Serial.print(m.settlingTimeYSec, 3); Serial.print(",");
-    Serial.print("satPct="); Serial.print(m.actuatorSaturationPct, 2); Serial.print(",");
+    Serial.print("METRIC,");
+    Serial.print("rms_cm="); Serial.print(m.rmsErrorCm, 3); Serial.print(",");
+    Serial.print("max_cm="); Serial.print(m.maxAbsErrorCm, 3); Serial.print(",");
+    Serial.print("settle_s="); Serial.print(m.settlingTimeSec, 3); Serial.print(",");
+    Serial.print("sat_pct="); Serial.print(m.actuatorSaturationPct, 2); Serial.print(",");
     Serial.print("samples="); Serial.println(m.totalSamples);
   }
 }
