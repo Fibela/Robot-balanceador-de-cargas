@@ -1,7 +1,10 @@
 - [x] Confirmar enfoque 100% Arduino/C++ (sin Node)
-- [x] Definir e implementar runner C++ para validar logs de pruebas CP/EX
-- [x] Crear estructura de evidencias y plantillas de resultados en docs
-- [x] Documentar flujo de ejecución del runner y trazabilidad de pruebas futuras
-- [ ] Ejecutar validación inicial del runner con logs de ejemplo
-- [x] Preparar guía de pruebas hardware pendientes para corrida con prototipo conectado
-- [ ] Entregar resumen final con estado de cobertura y siguientes pasos
+- [ ] Migrar firmware de 4 servos a 1 servo (config, driver, main, métricas)
+- [ ] Agregar comandos seriales para modo manual y automático
+- [ ] Ajustar telemetría para dashboard técnico (latencia, peso, acción, saturación, estabilidad)
+- [ ] Crear interfaz visual técnica en `ui/` (dashboard + panel manual + auditoría)
+- [ ] Documentar costos en nuevo archivo `.md` (hardware + software Corporación Premos)
+- [ ] Actualizar documentación principal y técnica (README + docs de pruebas/auditoría)
+- [ ] Definir pruebas robustas y unitarias para firmware e interfaz
+- [ ] Preparar guía de pruebas hardware pendientes para corrida con prototipo conectado
+- [ ] Entregar resumen final con estado de cobertura y próximos pasos

@@ -18,8 +18,7 @@ void MetricsCollector::reset() {
 void MetricsCollector::update(
   float targetDistanceCm,
   float measuredDistanceCm,
-  int servoYFrontDeg, int servoYRearDeg,
-  int servoZLeftDeg, int servoZRightDeg,
+  int servoMainDeg,
   int centerDeg, int maxDeltaDeg,
   float stableBandCm, float timeSec
 ) {
@@ -34,12 +33,9 @@ void MetricsCollector::update(
     settlingTimeSec = timeSec;
   }
 
-  int d1 = servoYFrontDeg - centerDeg; if (d1 < 0) d1 = -d1;
-  int d2 = servoYRearDeg - centerDeg;  if (d2 < 0) d2 = -d2;
-  int d3 = servoZLeftDeg - centerDeg;  if (d3 < 0) d3 = -d3;
-  int d4 = servoZRightDeg - centerDeg; if (d4 < 0) d4 = -d4;
-
-  if (d1 >= maxDeltaDeg || d2 >= maxDeltaDeg || d3 >= maxDeltaDeg || d4 >= maxDeltaDeg) {
+  int d = servoMainDeg - centerDeg;
+  if (d < 0) d = -d;
+  if (d >= maxDeltaDeg) {
     saturationCount++;
   }
 
@@ -68,15 +64,17 @@ void MetricsCollector::printCsvLine(
   float timeSec,
   float distanceCm,
   float errorCm,
-  int servoYFrontDeg, int servoYRearDeg,
-  int servoZLeftDeg, int servoZRightDeg
+  int servoMainDeg,
+  float latencyMs,
+  float weightGrams,
+  bool automaticMode
 ) const {
   Serial.print("DATA,");
   Serial.print(timeSec, 3); Serial.print(",");
   Serial.print(distanceCm, 3); Serial.print(",");
   Serial.print(errorCm, 3); Serial.print(",");
-  Serial.print(servoYFrontDeg); Serial.print(",");
-  Serial.print(servoYRearDeg); Serial.print(",");
-  Serial.print(servoZLeftDeg); Serial.print(",");
-  Serial.println(servoZRightDeg);
+  Serial.print(servoMainDeg); Serial.print(",");
+  Serial.print(latencyMs, 2); Serial.print(",");
+  Serial.print(weightGrams, 2); Serial.print(",");
+  Serial.println(automaticMode ? "AUTO" : "MANUAL");
 }

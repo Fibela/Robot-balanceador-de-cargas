@@ -8,11 +8,8 @@
 static const uint8_t HCSR04_TRIG_PIN = 8;
 static const uint8_t HCSR04_ECHO_PIN = 7;
 
-// Servos SG90 (plataforma 2 ejes con 4 actuadores)
-static const uint8_t SERVO_Y_FRONT_PIN = 3;
-static const uint8_t SERVO_Y_REAR_PIN = 5;
-static const uint8_t SERVO_Z_LEFT_PIN = 6;
-static const uint8_t SERVO_Z_RIGHT_PIN = 9;
+// Servo SG90 único (plataforma simplificada 1 actuador)
+static const uint8_t SERVO_MAIN_PIN = 3;
 
 // Estado y seguridad
 static const uint8_t STATUS_LED_PIN = 13;
@@ -29,10 +26,7 @@ static const float STABLE_ERROR_BAND_CM = 1.0f;
 static const int SERVO_MIN_DEG = 0;
 static const int SERVO_MAX_DEG = 180;
 static const int SERVO_CENTER_DEG = 90;
-static const int SERVO_TRIM_Y_FRONT = 0;
-static const int SERVO_TRIM_Y_REAR = 0;
-static const int SERVO_TRIM_Z_LEFT = 0;
-static const int SERVO_TRIM_Z_RIGHT = 0;
+static const int SERVO_TRIM_MAIN = 0;
 static const int SERVO_MAX_DELTA_DEG = 35; // desviación máxima desde centro
 
 // ===================== Control PID (error de distancia) =====================
@@ -40,9 +34,8 @@ static const float PID_DIST_KP = 2.2f;
 static const float PID_DIST_KI = 0.15f;
 static const float PID_DIST_KD = 0.4f;
 
-// Conversión de salida PID -> comando por eje
-static const float AXIS_MIX_Y_GAIN = 1.0f;
-static const float AXIS_MIX_Z_GAIN = 1.0f;
+// Conversión de salida PID -> comando del único servo
+static const float AXIS_MIX_MAIN_GAIN = 1.0f;
 
 // ===================== Seguridad =====================
 static const float MAX_SAFE_ERROR_CM = 12.0f;
@@ -60,5 +53,14 @@ static const uint8_t SIM_SCENARIO = 0;
 // Parámetros de simulación
 static const float SIM_BASE_DISTANCE_CM = TARGET_DISTANCE_CM;
 static const float SIM_NOISE_AMPLITUDE_CM = 0.25f;
+
+// ===================== Carga (HX711 opcional) =====================
+static const float MIN_LOAD_GRAMS = 5.0f; // requisito mínimo solicitado
+static const float DEFAULT_SIM_WEIGHT_GRAMS = 5.0f;
+
+// ===================== Modo de operación =====================
+// true = control automático por PID
+// false = control manual por comando serial
+static const bool DEFAULT_AUTOMATIC_MODE = true;
 
 #endif

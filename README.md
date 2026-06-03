@@ -1,30 +1,30 @@
 # Robot Balanceador de Cargas (Plataforma 10x10 cm) - Arduino Uno R3
 
-Proyecto semestral universitario (Calidad de Sistemas): plataforma balanceadora de cargas con control por software, orientada a validar lógica de control, seguridad y métricas de calidad mediante ejecución y pruebas desde terminal (monitor serial) en VSCode/Arduino IDE.
+Proyecto técnico-académico (Calidad de Sistemas): plataforma balanceadora con control por software, telemetría serial y dashboard visual para análisis de estabilidad, saturación, latencia, peso y auditoría operativa.
 
 ## 1) Objetivo del sistema
 
 Diseñar, implementar y validar un sistema de control para plataforma balanceadora que:
 
-- opere sobre los ejes **Y/Z** (según alcance del equipo),
-- utilice **4 servomotores SG90** como actuadores,
-- utilice **HC-SR04** para detección de objeto y seguimiento de variación de distancia/movimiento,
-- procese señales en lazo de control y genere comando por servo,
-- registre resultados y métricas por serial para análisis de calidad.
+- opere con **1 servomotor SG90** (iteración actual),
+- utilice **HC-SR04** para medición de distancia,
+- permita operación **automática (PID)** y **manual (panel de control)**,
+- registre métricas de **hardware, software e integración**,
+- entregue evidencia auditable para pruebas robustas y unitarias.
 
-Masa objetivo de validación del caso base: **36 g**.
+Masa mínima objetivo de operación: **5 g**.  
+Masa máxima: **determinada por pruebas experimentales**.
 
 ---
 
-## 2) Alcance académico (calidad de sistemas)
+## 2) Alcance actual
 
 Este repositorio cubre:
 
-- Documentación técnica de inicio a fin del proceso.
-- Diseño de pruebas y criterios de aceptación formales.
-- Marco de métricas alineado a **ISO/IEC 25010**.
-- Estructura de pruebas alineada a **IEEE 29119**.
-- Estrategia de validación del software desde terminal (serial logging).
+- Firmware Arduino (control + seguridad + telemetría).
+- Interfaz visual técnica local (`ui/`) para monitoreo y control manual.
+- Documentación de pruebas, auditoría y costos.
+- Trazabilidad de calidad alineada a ISO/IEC 25010 e IEEE 29119.
 
 ---
 
@@ -36,171 +36,115 @@ Este repositorio cubre:
 ├── TODO.md
 ├── docs
 │   ├── quality-metrics.md
-│   └── test-plan.md
+│   ├── test-plan.md
+│   ├── testing-terminal.md
+│   ├── testing-runner.md
+│   ├── test-evidence-template.md
+│   └── costos-hardware-software.md
 ├── include
 │   ├── config.h
-│   ├── imu_mpu6050.h
-│   ├── loadcell_hx711.h
+│   ├── distance_hcsr04.h
 │   ├── pid_controller.h
 │   ├── motor_driver.h
 │   ├── safety.h
 │   └── metrics.h
-└── src
-    ├── main.ino
-    ├── imu_mpu6050.cpp
-    ├── loadcell_hx711.cpp
-    ├── pid_controller.cpp
-    ├── motor_driver.cpp
-    ├── safety.cpp
-    └── metrics.cpp
+├── src
+│   ├── main.ino
+│   ├── distance_hcsr04.cpp
+│   ├── pid_controller.cpp
+│   ├── motor_driver.cpp
+│   ├── safety.cpp
+│   └── metrics.cpp
+├── tools
+│   └── test_runner.cpp
+└── ui
+    ├── index.html
+    ├── style.css
+    └── app.js
 ```
 
-> Nota de ingeniería documental: el repositorio incluye módulos heredados (IMU/HX711) de una iteración previa.  
-> Para el alcance actual del equipo, la documentación y validación se concentran en **Uno R3 + SG90 + HC-SR04** y pruebas de software por serial.
+---
+
+## 4) Funcionalidades clave (iteración actual)
+
+### Firmware (Arduino IDE)
+- Control PID de distancia en modo automático.
+- Control manual por comandos seriales:
+  - `MODE,AUTO`
+  - `MODE,MANUAL`
+  - `MANUAL,<0-180>`
+  - `STATUS`
+- Seguridad con E-STOP y gestión de fallos.
+- Telemetría CSV:
+  - `DATA,time_s,dist_cm,error_cm,servoMain,latency_ms,weight_g,mode`
+  - `METRIC,rms_cm,max_cm,settle_s,sat_pct,samples,...`
+  - `EVENT,...`
+  - `FAULT,...`
+
+### Interfaz visual técnica (`ui/`)
+- Conexión por Web Serial.
+- Panel visual de métricas en vivo.
+- Panel manual para posicionamiento de servo.
+- Módulo de auditoría de eventos y sugerencias técnicas.
 
 ---
 
-## 4) Hardware del equipo (versión actual)
+## 5) Hardware (configuración actual)
 
-### Control y sensado
 - 1x Arduino Uno R3
-- 1x Sensor ultrasónico HC-SR04
-- 1x Protoboard
-- Cables dupont
-- LEDs de testeo
+- 1x Servo SG90 (principal)
+- 1x HC-SR04
+- Protoboard + cables dupont
+- Fuente recomendada 5V/2A
+- E-STOP opcional (D2 INPUT_PULLUP)
 
-### Actuación
-- 4x servomotores Power Pro Micro Servo 9g SG90
-
-### Alimentación
-- Fuente dedicada recomendada para servos (**5V, al menos 2A**)
-- Batería de 9V: solo referencia inicial (no recomendada como única fuente de servos bajo carga)
-
-### Estructura
-- Plataforma conceptual de 10x10 cm (modelo de referencia del proyecto)
+Ver costos en: **`docs/costos-hardware-software.md`**
 
 ---
 
-## 5) Flujo funcional del software (alto nivel)
+## 6) Preparación y ejecución
 
-1. Leer distancia del HC-SR04.
-2. Estimar variación respecto al setpoint/escenario esperado.
-3. Aplicar lógica de control (proporcional/PID simplificado según implementación activa).
-4. Calcular comandos para servos por eje.
-5. Limitar salida por seguridad (rangos y saturación).
-6. Publicar telemetría serial (`DATA`, `EVENT`, `METRIC`).
-7. Evaluar métricas agregadas y criterios de aceptación.
-
----
-
-## 6) Mapeo de pines sugerido (Arduino Uno R3)
-
-> Configurable en `include/config.h`.
-
-- HC-SR04
-  - TRIG -> D8
-  - ECHO -> D7
-- SG90 #1 (Eje Y frontal) -> D3 (PWM)
-- SG90 #2 (Eje Y trasero) -> D5 (PWM)
-- SG90 #3 (Eje Z izquierdo) -> D6 (PWM)
-- SG90 #4 (Eje Z derecho) -> D9 (PWM)
-- LED estado -> D13
-- E-STOP (opcional) -> D2 (INPUT_PULLUP)
-
----
-
-## 7) Preparación de entorno y compilación
-
+## Firmware
 1. Abrir `src/main.ino` en Arduino IDE.
-2. Seleccionar placa: **Arduino Uno**.
-3. Seleccionar procesador/puerto COM correspondiente.
-4. Instalar librerías mínimas (si aplica en implementación actual):
-   - `Servo` (incluida en entorno Arduino)
-5. Compilar y subir.
-6. Abrir monitor serial a `115200` baudios.
+2. Seleccionar Board: **Arduino Uno**.
+3. Seleccionar puerto COM.
+4. Compilar y cargar.
+5. Abrir monitor serial a **115200**.
+
+## Interfaz
+1. Abrir `ui/index.html` en Chrome/Edge.
+2. Clic en **Conectar Serial**.
+3. Seleccionar puerto del Arduino.
+4. Visualizar métricas y usar panel manual si aplica.
 
 ---
 
-## 8) Estrategia de validación por terminal (VSCode/Serial Monitor)
+## 7) Calidad, pruebas y auditoría
 
-Como el enfoque inmediato es probar software, ejecutar campañas de prueba por serial:
-
-- Registrar líneas tipo:
-  - `DATA,time_ms,dist_cm,error_y,error_z,servo1,servo2,servo3,servo4`
-  - `EVENT,time_ms,code,detail`
-  - `METRIC,window_s,rms_error,max_error,settling_ms,sat_pct,loop_ok_pct`
-- Exportar logs a CSV.
-- Analizar en hoja de cálculo o script Python.
-- Consolidar evidencia por caso de prueba (ver `docs/test-plan.md`).
+- Pruebas de ruta crítica y exhaustivas: `docs/testing-terminal.md`
+- Runner de validación de logs: `docs/testing-runner.md`
+- Plantilla de evidencia formal: `docs/test-evidence-template.md`
+- Requisito explícito del proceso:
+  - pruebas robustas,
+  - pruebas unitarias de módulos críticos,
+  - registro de resultados y acciones correctivas.
 
 ---
 
-## 9) Parámetros iniciales recomendados
+## 8) Propiedad intelectual y licencias
 
-- Frecuencia de lazo: 20 a 50 Hz
-- Ventana de métrica: 10 s
-- Límite angular/comando equivalente por servo: 0° a 180° (con límites operativos más conservadores)
-- Banda de error estable: ±5% del valor objetivo de distancia
-- Saturación aceptable (operación nominal): < 25%
+- Firmware y documentación técnica: **Propiedad de Corporación Premos**.
+- Arduino IDE y librerías base: según sus licencias oficiales.
+- Uso del repositorio: técnico/académico bajo lineamientos del equipo.
 
 ---
 
-## 10) Criterios de aceptación global (resumen)
+## 9) Documentación técnica extendida
 
-- Estabilidad del control en caso base de **36 g**.
-- Errores dentro de umbral definido en plan de métricas.
-- Saturación no excesiva en operación nominal.
-- Trazas seriales completas y consistentes.
-- Cumplimiento documental de ISO/IEC 25010 + IEEE 29119.
-
----
-
-## 11) Gestión de calidad y trazabilidad
-
-La calidad se evidencia con:
-
-- Matriz requisito → caso de prueba → métrica → evidencia.
-- Registro de resultados por ejecución.
-- Umbrales de aprobación cuantitativos.
-- Historial de ajustes de parámetros y su impacto.
-
-Ver detalle en:
-
-- `docs/quality-metrics.md`
-- `docs/test-plan.md`
-- `TODO.md`
-
----
-
-## 12) Entregables académicos recomendados
-
-- Documento técnico final (arquitectura, decisiones y resultados).
-- Plan de pruebas ejecutado y evidencias.
-- Tabla comparativa de iteraciones de control.
-- Bitácora de defectos/incidencias y correcciones.
-- Conclusiones de calidad del sistema.
-
----
-
-## 13) Apartado técnico (normas, teoría, métricas, eficiencia y escalabilidad)
-
-Para soporte técnico formal del proyecto, revisar:
-
-- `Documentación/system-engineering.md`  
-  Arquitectura del sistema, definiciones técnicas y teoría de control aplicada (lazo, error, PID, saturación, settling).
-- `Documentación/standards-compliance.md`  
-  Mapeo de cumplimiento y trazabilidad alineado a ISO/IEC 25010 e IEEE 29119.
-- `Documentación/metrics-and-calculations.md`  
-  Fórmulas, métricas cuantitativas, criterios de aceptación y ejemplos de cálculo.
-- `Documentación/efficiency-scalability.md`  
-  Análisis de eficiencia temporal/memoria en Arduino Uno, límites de escalabilidad y estrategias de optimización.
-- `docs/testing-terminal.md`  
-  Procedimiento operativo de pruebas por terminal serial (ruta crítica + pruebas exhaustivas).
-
-Estos documentos conforman la base técnica para validación académica, argumentación ingenieril y evidencia de calidad del software.
-
----
-
-## 14) Licencia
-
-Uso académico.
+- `Documentación/system-engineering.md`
+- `Documentación/standards-compliance.md`
+- `Documentación/metrics-and-calculations.md`
+- `Documentación/efficiency-scalability.md`
+- `docs/testing-terminal.md`
+- `docs/costos-hardware-software.md`
+- `docs/deuda-tecnica.md`

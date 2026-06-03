@@ -6,35 +6,19 @@
 
 class MotorDriver {
 public:
-  MotorDriver(
-    uint8_t yFrontPin, uint8_t yRearPin,
-    uint8_t zLeftPin, uint8_t zRightPin
-  );
+  explicit MotorDriver(uint8_t mainPin);
 
   void begin();
-  void setOutput(float controlY, float controlZ, int maxDeltaDeg);
+  void setOutput(float controlMain, int maxDeltaDeg);
+  void setManualAngle(int targetDeg);
   void stopAll();
 
-  int getYFrontDeg() const;
-  int getYRearDeg() const;
-  int getZLeftDeg() const;
-  int getZRightDeg() const;
+  int getMainDeg() const;
 
 private:
-  uint8_t yFrontPin;
-  uint8_t yRearPin;
-  uint8_t zLeftPin;
-  uint8_t zRightPin;
-
-  Servo servoYFront;
-  Servo servoYRear;
-  Servo servoZLeft;
-  Servo servoZRight;
-
-  int lastYFrontDeg;
-  int lastYRearDeg;
-  int lastZLeftDeg;
-  int lastZRightDeg;
+  uint8_t mainPin;
+  Servo servoMain;
+  int lastMainDeg;
 
   int clampDeg(int v) const;
 };

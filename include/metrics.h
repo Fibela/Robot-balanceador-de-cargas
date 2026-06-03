@@ -19,8 +19,7 @@ public:
   void update(
     float targetDistanceCm,
     float measuredDistanceCm,
-    int servoYFrontDeg, int servoYRearDeg,
-    int servoZLeftDeg, int servoZRightDeg,
+    int servoMainDeg,
     int centerDeg, int maxDeltaDeg,
     float stableBandCm, float timeSec
   );
@@ -30,8 +29,10 @@ public:
     float timeSec,
     float distanceCm,
     float errorCm,
-    int servoYFrontDeg, int servoYRearDeg,
-    int servoZLeftDeg, int servoZRightDeg
+    int servoMainDeg,
+    float latencyMs,
+    float weightGrams,
+    bool automaticMode
   ) const;
 
 private:

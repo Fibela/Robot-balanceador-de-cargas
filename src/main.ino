@@ -12,13 +12,9 @@ PidController pidDist(
   -(float)SERVO_MAX_DELTA_DEG, (float)SERVO_MAX_DELTA_DEG
 );
 
-MotorDriver motors(
-  SERVO_Y_FRONT_PIN, SERVO_Y_REAR_PIN,
-  SERVO_Z_LEFT_PIN, SERVO_Z_RIGHT_PIN
-);
+MotorDriver motors(SERVO_MAIN_PIN);
 
 // Reutilizado como corte por E-STOP y chequeo de límites.
-// Para ángulos, enviamos "error equivalente" en ambos ejes para usar el mismo guard.
 SafetyManager safety(ESTOP_PIN, MAX_SAFE_ERROR_CM);
 MetricsCollector metrics;
 
@@ -26,14 +22,86 @@ MetricsCollector metrics;
 uint32_t lastControlMs = 0;
 uint32_t startMs = 0;
 
+// ===================== Estado operación =====================
+bool automaticMode = DEFAULT_AUTOMATIC_MODE;
+int manualServoDeg = SERVO_CENTER_DEG;
+
 // ===================== Utilidad =====================
 float getTimeSec() {
   return (millis() - startMs) / 1000.0f;
 }
 
+float getSimWeightGrams(float tSec) {
+  float w = DEFAULT_SIM_WEIGHT_GRAMS + 0.8f * sin(0.7f * tSec);
+  if (w < MIN_LOAD_GRAMS) return MIN_LOAD_GRAMS;
+  return w;
+}
+
 void printHeader() {
   Serial.println("INFO,Robot Balanceador de Cargas - Prototipo 1 (Arduino Uno)");
-  Serial.println("INFO,Formato CSV: DATA,time_s,dist_cm,error_cm,servoYF,servoYR,servoZL,servoZR");
+  Serial.println("INFO,Formato CSV: DATA,time_s,dist_cm,error_cm,servoMain,latency_ms,weight_g,mode");
+  Serial.println("INFO,Comandos: MODE,AUTO | MODE,MANUAL | MANUAL,<deg 0-180> | STATUS");
+}
+
+void printStatus(float weightGrams) {
+  Serial.print("EVENT,STATUS,mode=");
+  Serial.print(automaticMode ? "AUTO" : "MANUAL");
+  Serial.print(",servo=");
+  Serial.print(motors.getMainDeg());
+  Serial.print(",minLoad_g=");
+  Serial.print(MIN_LOAD_GRAMS, 2);
+  Serial.print(",weight_g=");
+  Serial.println(weightGrams, 2);
+}
+
+void processSerialCommands(float weightGrams) {
+  if (!Serial.available()) return;
+
+  String line = Serial.readStringUntil('\n');
+  line.trim();
+
+  if (line.length() == 0) return;
+
+  if (line == "MODE,AUTO") {
+    automaticMode = true;
+    pidDist.reset();
+    Serial.println("EVENT,MODE,auto");
+    return;
+  }
+
+  if (line == "MODE,MANUAL") {
+    automaticMode = false;
+    motors.setManualAngle(manualServoDeg);
+    Serial.println("EVENT,MODE,manual");
+    return;
+  }
+
+  if (line == "STATUS") {
+    printStatus(weightGrams);
+    return;
+  }
+
+  if (line.startsWith("MANUAL,")) {
+    int comma = line.indexOf(',');
+    if (comma > 0 && comma < (int)line.length() - 1) {
+      String v = line.substring(comma + 1);
+      int deg = v.toInt();
+      if (deg < SERVO_MIN_DEG) deg = SERVO_MIN_DEG;
+      if (deg > SERVO_MAX_DEG) deg = SERVO_MAX_DEG;
+      manualServoDeg = deg;
+
+      if (!automaticMode) {
+        motors.setManualAngle(manualServoDeg);
+      }
+
+      Serial.print("EVENT,MANUAL,deg=");
+      Serial.println(manualServoDeg);
+      return;
+    }
+  }
+
+  Serial.print("EVENT,CMD,unknown:");
+  Serial.println(line);
 }
 
 void setup() {
@@ -64,7 +132,6 @@ static bool getDistanceSample(DistanceData &dd, uint32_t nowMs) {
   }
 
   // Modo simulación por compilación (sin Node/hardware adicional).
-  // Mantiene formato de telemetría igual al modo real.
   float t = (nowMs - startMs) / 1000.0f;
   float dist = SIM_BASE_DISTANCE_CM;
 
@@ -84,7 +151,6 @@ static bool getDistanceSample(DistanceData &dd, uint32_t nowMs) {
     dist = TARGET_DISTANCE_CM + 1.6f * sin(2.0f * t);
   }
 
-  // Ruido determinístico simple
   float noise = SIM_NOISE_AMPLITUDE_CM * sin(17.0f * t);
   dd.distanceCm = dist + noise;
   dd.valid = true;
@@ -93,9 +159,15 @@ static bool getDistanceSample(DistanceData &dd, uint32_t nowMs) {
 
 void loop() {
   uint32_t nowMs = millis();
+  float tSec = getTimeSec();
+  float weightGrams = getSimWeightGrams(tSec);
+
+  processSerialCommands(weightGrams);
+
   if (nowMs - lastControlMs < CONTROL_PERIOD_MS) {
     return;
   }
+  uint32_t dtMs = nowMs - lastControlMs;
   lastControlMs = nowMs;
 
   DistanceData dd;
@@ -105,15 +177,16 @@ void loop() {
   float absErr = errorCm >= 0.0f ? errorCm : -errorCm;
   bool safe = safety.update(sensorsHealthy, absErr, absErr);
 
-  float controlY = 0.0f;
-  float controlZ = 0.0f;
+  float controlMain = 0.0f;
 
   if (safe) {
-    float pidOut = pidDist.update(TARGET_DISTANCE_CM, dd.distanceCm, CONTROL_PERIOD_MS / 1000.0f);
-    controlY = pidOut * AXIS_MIX_Y_GAIN;
-    controlZ = pidOut * AXIS_MIX_Z_GAIN;
-
-    motors.setOutput(controlY, controlZ, SERVO_MAX_DELTA_DEG);
+    if (automaticMode) {
+      float pidOut = pidDist.update(TARGET_DISTANCE_CM, dd.distanceCm, CONTROL_PERIOD_MS / 1000.0f);
+      controlMain = pidOut * AXIS_MIX_MAIN_GAIN;
+      motors.setOutput(controlMain, SERVO_MAX_DELTA_DEG);
+    } else {
+      motors.setManualAngle(manualServoDeg);
+    }
     digitalWrite(STATUS_LED_PIN, HIGH);
   } else {
     motors.stopAll();
@@ -124,12 +197,11 @@ void loop() {
     Serial.println(safety.getLastFault());
   }
 
-  float tSec = getTimeSec();
+  float latencyMs = (float)dtMs;
   metrics.update(
     TARGET_DISTANCE_CM,
     dd.distanceCm,
-    motors.getYFrontDeg(), motors.getYRearDeg(),
-    motors.getZLeftDeg(), motors.getZRightDeg(),
+    motors.getMainDeg(),
     SERVO_CENTER_DEG, SERVO_MAX_DELTA_DEG,
     STABLE_ERROR_BAND_CM, tSec
   );
@@ -138,11 +210,12 @@ void loop() {
     tSec,
     dd.distanceCm,
     errorCm,
-    motors.getYFrontDeg(), motors.getYRearDeg(),
-    motors.getZLeftDeg(), motors.getZRightDeg()
+    motors.getMainDeg(),
+    latencyMs,
+    weightGrams,
+    automaticMode
   );
 
-  // Resumen cada ~1s
   static uint32_t lastReportMs = 0;
   if (nowMs - lastReportMs >= 1000) {
     lastReportMs = nowMs;
@@ -153,6 +226,9 @@ void loop() {
     Serial.print("max_cm="); Serial.print(m.maxAbsErrorCm, 3); Serial.print(",");
     Serial.print("settle_s="); Serial.print(m.settlingTimeSec, 3); Serial.print(",");
     Serial.print("sat_pct="); Serial.print(m.actuatorSaturationPct, 2); Serial.print(",");
-    Serial.print("samples="); Serial.println(m.totalSamples);
+    Serial.print("samples="); Serial.print(m.totalSamples); Serial.print(",");
+    Serial.print("mode="); Serial.print(automaticMode ? "AUTO" : "MANUAL"); Serial.print(",");
+    Serial.print("servo="); Serial.print(motors.getMainDeg()); Serial.print(",");
+    Serial.print("weight_g="); Serial.println(weightGrams, 2);
   }
 }
